@@ -32,6 +32,10 @@ Jinitamy是一个轻量级的Java Web框架，基于Netty构建，提供简单�
 
 ```java
 import com.jinitamy.core.Engine;
+import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
+import java.nio.charset.StandardCharsets;
 
 public class App {
     public static void main(String[] args) throws Exception {
@@ -39,11 +43,15 @@ public class App {
         
         // 添加路由
         engine.get("/", ctx -> {
-            String resp = "Hello, World!";
-            ctx.getResponse().content().writeBytes(resp.getBytes());
+            String resp = "Hello, Jinitamy!";
+            ctx.getResponse().headers()
+                    .set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.TEXT_PLAIN)
+                    .set(HttpHeaderNames.CONTENT_LENGTH, resp.length());
+            ctx.getResponse().content().writeBytes(Unpooled.copiedBuffer(resp, StandardCharsets.UTF_8));
         });
         
         // 启动服务器
+        engine.setPort(8080);
         engine.start();
     }
 }
@@ -54,8 +62,21 @@ public class App {
 ```java
 engine.get("/hello/:name", ctx -> {
     String name = ctx.getParam("name");
+    if (name == null || name.trim().isEmpty()) {
+        ctx.status(400);
+        String errorResp = "Bad Request: name parameter is required";
+        ctx.getResponse().headers()
+                .set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.TEXT_PLAIN)
+                .set(HttpHeaderNames.CONTENT_LENGTH, errorResp.length());
+        ctx.getResponse().content().writeBytes(Unpooled.copiedBuffer(errorResp, StandardCharsets.UTF_8));
+        return;
+    }
+    
     String resp = "Hello, " + name + "!";
-    ctx.getResponse().content().writeBytes(resp.getBytes());
+    ctx.getResponse().headers()
+            .set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.TEXT_PLAIN)
+            .set(HttpHeaderNames.CONTENT_LENGTH, resp.length());
+    ctx.getResponse().content().writeBytes(Unpooled.copiedBuffer(resp, StandardCharsets.UTF_8));
 });
 ```
 
@@ -82,6 +103,10 @@ engine.get("/hello/:name", ctx -> {
 
 ```java
 import com.jinitamy.core.template.TemplateEngine;
+import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpHeaderValues;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -91,7 +116,10 @@ engine.get("/", ctx -> {
     model.put("content", "这是使用模板引擎渲染的内容");
     
     String html = TemplateEngine.render("index.ftl", model);
-    ctx.getResponse().content().writeBytes(html.getBytes());
+    ctx.getResponse().headers()
+            .set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.TEXT_HTML)
+            .set(HttpHeaderNames.CONTENT_LENGTH, html.length());
+    ctx.getResponse().content().writeBytes(Unpooled.copiedBuffer(html, StandardCharsets.UTF_8));
 });
 ```
 
@@ -99,9 +127,15 @@ engine.get("/", ctx -> {
 
 ```java
 engine.use((ctx, next) -> {
-    System.out.println("Before request");
-    next.handle(ctx);
-    System.out.println("After request");
+    long start = System.currentTimeMillis();
+    System.out.printf("[%s] %s\n", ctx.getMethod(), ctx.getPath());
+    try {
+        next.handle(ctx);
+    } catch (Exception e) {
+        System.err.println("Error processing request: " + e.getMessage());
+        ctx.status(500);
+    }
+    System.out.printf("Time: %dms\n", System.currentTimeMillis() - start);
 });
 ```
 
@@ -121,8 +155,15 @@ mvn clean package
 
 ## 运行示例
 
+### 方法1：直接运行主类
 ```bash
-java -jar target/jinitamy-1.0-SNAPSHOT.jar
+mvn exec:java -Dexec.mainClass="com.jinitamy.example.ExampleApp"
+```
+
+### 方法2：编译后运行
+```bash
+mvn compile
+java -cp target/classes com.jinitamy.example.ExampleApp
 ```
 
 ## 目录结构
@@ -134,9 +175,16 @@ src/
 │   │   └── com/
 │   │       └── jinitamy/
 │   │           ├── core/
+│   │           │   ├── Engine.java
+│   │           │   ├── Router.java
+│   │           │   ├── Context.java
+│   │           │   ├── Handler.java
+│   │           │   ├── Middleware.java
+│   │           │   ├── HttpHandler.java
 │   │           │   └── template/
 │   │           │       └── TemplateEngine.java
-│   │           └── ...
+│   │           └── example/
+│   │               └── ExampleApp.java
 │   └── resources/
 │       └── templates/
 │           └── index.ftl
@@ -144,7 +192,10 @@ src/
     └── java/
         └── com/
             └── jinitamy/
-                └── ...
+                └── core/
+                    ├── RouterTest.java
+                    ├── ContextTest.java
+                    └── ...
 ```
 
 ## 许可证
