@@ -1,11 +1,14 @@
 package com.jinitamy.example;
 
 import com.jinitamy.core.Engine;
+import com.jinitamy.core.template.TemplateEngine;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ExampleApp {
     public static void main(String[] args) throws Exception {
@@ -25,13 +28,17 @@ public class ExampleApp {
         });
 
         // 注册路由
+        // 使用模板引擎的示例
         engine.get("/", ctx -> {
-            String resp = "Hello, Jinitamy!";
+            Map<String, Object> model = new HashMap<>();
+            model.put("title", "欢迎使用 Jinitamy 框架");
+            model.put("content", "这是一个基于Netty构建的轻量级Java Web框架，支持路由、中间件和模板渲染。");
+
+            String html = TemplateEngine.render("index.ftl", model);
             ctx.getResponse().headers()
-                    .set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.TEXT_PLAIN)
-                    .set(HttpHeaderNames.CONTENT_LENGTH, resp.length());
-            ctx.getResponse().content()
-                    .writeBytes(Unpooled.copiedBuffer(resp, StandardCharsets.UTF_8));
+                    .set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.TEXT_HTML)
+                    .set(HttpHeaderNames.CONTENT_LENGTH, html.length());
+            ctx.getResponse().content().writeBytes(Unpooled.copiedBuffer(html, StandardCharsets.UTF_8));
         });
 
         engine.get("/hello/:name", ctx -> {
