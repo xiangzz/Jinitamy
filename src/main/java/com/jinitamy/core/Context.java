@@ -118,6 +118,18 @@ public class Context {
     }
 
     /**
+     * 移除路由参数
+     * 
+     * 用于路由匹配回溯时清理参数
+     * 
+     * @param key 参数名
+     * @return 被移除的参数值，如果不存在则返回null
+     */
+    public String removeParam(String key) {
+        return params.remove(key);
+    }
+
+    /**
      * 设置自定义属性
      * 
      * 用于在中间件和处理器之间传递数据，例如：
@@ -177,4 +189,4 @@ public class Context {
         }
         return this;
     }
-} 
+}

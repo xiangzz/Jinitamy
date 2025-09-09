@@ -17,45 +17,93 @@ import java.util.Map;
  * 
  * 使用示例：
  * <pre>
+ * // 使用默认模板路径
  * Map<String, Object> model = new HashMap<>();
  * model.put("title", "页面标题");
  * model.put("content", "页面内容");
  * String html = TemplateEngine.render("index.ftl", model);
+ * 
+ * // 配置自定义模板路径
+ * TemplateEngine.setTemplatePath("/custom/templates");
+ * String html2 = TemplateEngine.render("custom.ftl", model);
  * </pre>
  * 
  * 注意事项：
- * 1. 模板文件必须放在 src/main/resources/templates 目录下
- * 2. 模板文件必须使用.ftl后缀
+ * 1. 默认模板路径为 src/main/resources/templates，可通过setTemplatePath方法修改
+ * 2. 模板文件建议使用.ftl后缀
  * 3. 模板文件必须使用UTF-8编码
  * 4. 模板变量使用${变量名}的形式
  */
 public class TemplateEngine {
+    /** 默认模板路径 */
+    private static final String DEFAULT_TEMPLATE_PATH = "src/main/resources/templates";
+    
     /**
      * FreeMarker配置对象
      * 使用静态初始化确保全局单例
      */
-    private static final Configuration configuration;
+    private static Configuration configuration;
+    
+    /** 当前模板路径 */
+    private static String currentTemplatePath = DEFAULT_TEMPLATE_PATH;
 
     /**
      * 静态初始化块
-     * 配置FreeMarker模板引擎的基本设置：
-     * 1. 设置模板文件加载目录
-     * 2. 设置默认编码为UTF-8
-     * 
-     * @throws RuntimeException 当模板引擎初始化失败时抛出
+     * 使用默认配置初始化模板引擎
      */
     static {
+        initializeConfiguration(DEFAULT_TEMPLATE_PATH);
+    }
+    
+    /**
+     * 初始化FreeMarker配置
+     * 
+     * @param templatePath 模板文件路径
+     * @throws RuntimeException 当模板引擎初始化失败时抛出
+     */
+    private static synchronized void initializeConfiguration(String templatePath) {
         configuration = new Configuration(Configuration.VERSION_2_3_32);
         try {
             // 设置模板文件所在目录
-            configuration.setDirectoryForTemplateLoading(
-                new File("src/main/resources/templates")
-            );
+            configuration.setDirectoryForTemplateLoading(new File(templatePath));
             // 设置模板文件编码
             configuration.setDefaultEncoding("UTF-8");
+            currentTemplatePath = templatePath;
         } catch (IOException e) {
-            throw new RuntimeException("Failed to initialize template engine", e);
+            throw new RuntimeException("Failed to initialize template engine with path: " + templatePath, e);
         }
+    }
+    
+    /**
+     * 设置模板文件路径
+     * 
+     * 重新配置模板引擎使用新的模板路径。
+     * 注意：此操作会重新初始化整个模板引擎配置。
+     * 
+     * @param templatePath 新的模板文件路径
+     * @throws RuntimeException 当路径无效或初始化失败时抛出
+     */
+    public static void setTemplatePath(String templatePath) {
+        if (templatePath == null || templatePath.trim().isEmpty()) {
+            throw new IllegalArgumentException("Template path cannot be null or empty");
+        }
+        initializeConfiguration(templatePath.trim());
+    }
+    
+    /**
+     * 获取当前模板文件路径
+     * 
+     * @return 当前使用的模板文件路径
+     */
+    public static String getTemplatePath() {
+        return currentTemplatePath;
+    }
+    
+    /**
+     * 重置模板路径为默认值
+     */
+    public static void resetToDefaultPath() {
+        initializeConfiguration(DEFAULT_TEMPLATE_PATH);
     }
 
     /**
@@ -82,4 +130,4 @@ public class TemplateEngine {
             throw new RuntimeException("Template rendering failed", e);
         }
     }
-} 
+}

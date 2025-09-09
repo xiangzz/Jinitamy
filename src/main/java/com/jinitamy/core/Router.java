@@ -106,28 +106,68 @@ public class Router {
             return null;
         }
 
-        Node node = root;
-        for (String part : parts) {
-            boolean found = false;
-            // 遍历所有子节点，包括动态参数和通配符
-            for (Map.Entry<String, Node> entry : new ArrayList<>(node.children.entrySet())) {
-                Node child = entry.getValue();
-                if (child.part.equals(part) || child.isWild) {
-                    // 如果是动态参数，保存参数值
-                    if (child.isWild && !child.param.isEmpty()) {
-                        ctx.setParam(child.param, part);
-                    }
-                    node = child;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                return null;
+        return searchNode(root, parts, 0, ctx);
+    }
+    
+    /**
+     * 递归搜索路由节点
+     * 
+     * @param node 当前节点
+     * @param parts 路径片段数组
+     * @param index 当前处理的片段索引
+     * @param ctx 请求上下文
+     * @return 匹配的处理器，如果没有匹配则返回null
+     */
+    private Handler searchNode(Node node, String[] parts, int index, Context ctx) {
+        // 如果已经处理完所有路径片段
+        if (index == parts.length) {
+            return node.handler;
+        }
+        
+        String part = parts[index];
+        
+        // 1. 优先匹配静态路由
+        Node staticChild = node.children.get(part);
+        if (staticChild != null && !staticChild.isWild) {
+            Handler result = searchNode(staticChild, parts, index + 1, ctx);
+            if (result != null) {
+                return result;
             }
         }
         
-        return node.handler;
+        // 2. 匹配动态参数路由
+        for (Node child : node.children.values()) {
+            if (child.isWild && child.part.startsWith(":")) {
+                // 保存参数值
+                ctx.setParam(child.param, part);
+                Handler result = searchNode(child, parts, index + 1, ctx);
+                if (result != null) {
+                    return result;
+                }
+                // 如果没有匹配，移除参数
+                ctx.removeParam(child.param);
+            }
+        }
+        
+        // 3. 匹配通配符路由（*匹配剩余所有路径）
+        for (Node child : node.children.values()) {
+            if (child.isWild && "*".equals(child.part)) {
+                // 通配符匹配剩余所有路径
+                StringBuilder wildcardValue = new StringBuilder();
+                for (int i = index; i < parts.length; i++) {
+                    if (i > index) {
+                        wildcardValue.append("/");
+                    }
+                    wildcardValue.append(parts[i]);
+                }
+                if (!child.param.isEmpty()) {
+                    ctx.setParam(child.param, wildcardValue.toString());
+                }
+                return child.handler;
+            }
+        }
+        
+        return null;
     }
 
     /**
@@ -135,13 +175,23 @@ public class Router {
      * 
      * 将URL路径分割为片段数组，过滤掉空片段。
      * 例如："/user/123" -> ["user", "123"]
+     * 特殊处理根路径"/" -> []
      * 
      * @param path URL路径
      * @return 路径片段数组
      */
     private String[] parsePath(String path) {
+        if (path == null || path.isEmpty()) {
+            return new String[0];
+        }
+        
+        // 处理根路径
+        if ("/".equals(path)) {
+            return new String[0];
+        }
+        
         return Arrays.stream(path.split("/"))
                 .filter(p -> !p.isEmpty())
                 .toArray(String[]::new);
     }
-} 
+}

@@ -45,6 +45,12 @@ public class Engine {
     private final List<Middleware> middlewares;
     /** 服务器端口号，默认为8080 */
     private int port = 8080;
+    /** 主事件循环组（用于接收连接） */
+    private EventLoopGroup bossGroup;
+    /** 工作事件循环组（用于处理连接） */
+    private EventLoopGroup workerGroup;
+    /** 服务器是否正在运行 */
+    private volatile boolean running = false;
 
     /**
      * 构造函数
@@ -118,12 +124,17 @@ public class Engine {
      * 4. 绑定端口并启动服务器
      * 
      * @throws Exception 当服务器启动失败时抛出
+     * @throws IllegalStateException 当服务器已经在运行时抛出
      */
     public void start() throws Exception {
+        if (running) {
+            throw new IllegalStateException("Server is already running");
+        }
+        
         // 创建主事件循环组（用于接收连接）
-        EventLoopGroup bossGroup = new NioEventLoopGroup(1);
+        this.bossGroup = new NioEventLoopGroup(1);
         // 创建工作事件循环组（用于处理连接）
-        EventLoopGroup workerGroup = new NioEventLoopGroup();
+        this.workerGroup = new NioEventLoopGroup();
         
         try {
             ServerBootstrap b = new ServerBootstrap();
@@ -143,14 +154,64 @@ public class Engine {
 
             // 绑定端口并启动服务器
             b.bind(port).sync();
+            this.running = true;
             logger.info("Server started on port {}", port);
         } catch (Exception e) {
             logger.error("Server start failed", e);
             // 优雅关闭事件循环组
-            bossGroup.shutdownGracefully();
-            workerGroup.shutdownGracefully();
+            if (bossGroup != null) {
+                bossGroup.shutdownGracefully();
+            }
+            if (workerGroup != null) {
+                workerGroup.shutdownGracefully();
+            }
+            this.running = false;
             throw e;
         }
+    }
+
+    /**
+     * 停止HTTP服务器
+     * 
+     * 该方法会优雅地关闭服务器：
+     * 1. 停止接收新连接
+     * 2. 等待现有连接处理完成
+     * 3. 关闭事件循环组
+     * 4. 释放所有资源
+     * 
+     * @throws IllegalStateException 当服务器未运行时抛出
+     */
+    public void stop() {
+        if (!running) {
+            throw new IllegalStateException("Server is not running");
+        }
+        
+        logger.info("Stopping server on port {}", port);
+        
+        try {
+            // 优雅关闭事件循环组
+            if (bossGroup != null) {
+                bossGroup.shutdownGracefully().sync();
+            }
+            if (workerGroup != null) {
+                workerGroup.shutdownGracefully().sync();
+            }
+            
+            this.running = false;
+            logger.info("Server stopped successfully");
+        } catch (InterruptedException e) {
+            logger.error("Error occurred while stopping server", e);
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * 检查服务器是否正在运行
+     * 
+     * @return 如果服务器正在运行返回true，否则返回false
+     */
+    public boolean isRunning() {
+        return running;
     }
 
     /**
@@ -170,4 +231,4 @@ public class Engine {
     public List<Middleware> getMiddlewares() {
         return middlewares;
     }
-} 
+}
