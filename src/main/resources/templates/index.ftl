@@ -122,8 +122,9 @@
             const restartBtn = document.getElementById('restart-btn');
             
             // 示例文本 - 可以替换为您自己的内容
-            const text = contentElement.innerHTML;
-            const texts = [text];
+            const text = contentElement.textContent || contentElement.innerText;
+            contentElement.innerHTML = '';
+            const texts = [text.trim()];
             
             let currentTextIndex = 0;
             let currentCharIndex = 0;
